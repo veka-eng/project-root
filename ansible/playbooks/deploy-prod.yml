@@ -1,0 +1,7 @@
+- name: Deploy PROD
+  hosts: web
+  gather_facts: yes
+  vars:
+    app_dir: /opt/ci-cd-app
+  roles:
+    - role: app

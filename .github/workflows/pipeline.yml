@@ -1,0 +1,74 @@
+name: CI-CD Python
+on:
+  push:
+    branches: [dev, main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r app/requirements.txt
+      - name: Run tests
+        run: |
+          . .venv/bin/activate
+          pytest -q
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start servers (Docker)
+        run: |
+          docker compose up -d --build
+          sleep 5
+          docker ps
+
+      - name: Write SSH key
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            echo "${{ secrets.DEV_SSH_KEY }}" > id_ci
+          else
+            echo "${{ secrets.PROD_SSH_KEY }}" > id_ci
+          fi
+          chmod 600 id_ci
+
+      - name: Install Ansible
+        run: |
+          sudo apt-get update && sudo apt-get install -y ansible sshpass
+
+      - name: Known hosts
+        run: |
+          ssh-keyscan -p 2222 127.0.0.1 >> ~/.ssh/known_hosts || true
+          ssh-keyscan -p 2200 127.0.0.1 >> ~/.ssh/known_hosts || true
+
+      - name: Deploy to DEV
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          ansible-playbook -i ansible/inventory/dev.ini ansible/playbooks/deploy-dev.yml \
+            --private-key ./id_ci -e "GITHUB_SHA=${GITHUB_SHA}"
+
+      - name: Deploy to PROD
+        if: github.ref == 'refs/heads/main'
+        run: |
+          ansible-playbook -i ansible/inventory/prod.ini ansible/playbooks/deploy-prod.yml \
+            --private-key ./id_ci -e "GITHUB_SHA=${GITHUB_SHA}"
+
+      - name: Smoke test
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/dev" ]; then
+            docker exec serveur-dev bash -lc "curl -s http://127.0.0.1/"
+          else
+            docker exec serveur-prod bash -lc "curl -s http://127.0.0.1/"
+          fi

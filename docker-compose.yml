@@ -1,0 +1,30 @@
+services:
+  serveur-dev:
+    build: ./infra/sshbox
+    container_name: serveur-dev
+    privileged: true
+    ports:
+      - "2222:22"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+    stop_signal: SIGRTMIN+3
+    command: ["/sbin/init"]
+
+  serveur-prod:
+    build: ./infra/sshbox
+    container_name: serveur-prod
+    privileged: true
+    ports:
+      - "2200:22"
+    volumes:
+      - /sys/fs/cgroup:/sys/fs/cgroup
+    tmpfs:
+      - /run
+      - /run/lock
+      - /tmp
+    stop_signal: SIGRTMIN+3
+    command: ["/sbin/init"]

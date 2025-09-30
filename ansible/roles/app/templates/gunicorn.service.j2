@@ -1,0 +1,15 @@
+[Unit]
+Description=CI/CD Flask app (Gunicorn)
+After=network.target
+
+[Service]
+EnvironmentFile=/etc/default/ci_cd_app_env
+WorkingDirectory={{ app_dir }}
+ExecStart={{ app_dir }}/.venv/bin/gunicorn --workers 2 --bind unix:/run/ci-cd-app/gunicorn.sock app.wsgi:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RuntimeDirectory=ci-cd-app
+RuntimeDirectoryMode=0755
+
+[Install]
+WantedBy=multi-user.target

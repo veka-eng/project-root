@@ -1,0 +1,71 @@
+---
+- name: Installer dépendances système
+  apt:
+    name:
+      - git
+      - python3
+      - python3-venv
+      - python3-pip
+      - nginx
+    state: present
+    update_cache: yes
+
+- name: Créer dossier app
+  file:
+    path: "{{ app_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Cloner/mettre à jour le dépôt
+  git:
+    repo: "https://github.com/veka-eng/project-root.git"
+    dest: "{{ app_dir }}"
+    version: "{{ lookup('env','GITHUB_SHA') | default('main', true) }}"
+    force: yes
+
+- name: Créer venv
+  command: "python3 -m venv {{ app_dir }}/.venv"
+  args:
+    creates: "{{ app_dir }}/.venv/bin/activate"
+
+- name: Installer requirements
+  command: "{{ app_dir }}/.venv/bin/pip install -r {{ app_dir }}/app/requirements.txt"
+
+- name: Exporter APP_ENV (DEV/PROD)
+  copy:
+    dest: /etc/default/ci_cd_app_env
+    content: "APP_ENV={{ hostvars[inventory_hostname].APP_ENV | default('dev') }}\n"
+
+- name: Déployer service systemd pour gunicorn
+  template:
+    src: gunicorn.service.j2
+    dest: /etc/systemd/system/ci-cd-app.service
+    mode: "0644"
+  notify: Restart gunicorn
+
+- name: Déployer site Nginx
+  template:
+    src: nginx.site.j2
+    dest: /etc/nginx/sites-available/ci-cd-app
+    mode: "0644"
+
+- name: Activer site Nginx
+  file:
+    src: /etc/nginx/sites-available/ci-cd-app
+    dest: /etc/nginx/sites-enabled/ci-cd-app
+    state: link
+  notify: Restart nginx
+
+- name: Désactiver default Nginx si présent
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Restart nginx
+
+- name: Créer un log de déploiement
+  copy:
+    dest: /var/log/deploy_app.log
+    content: "Déployé sur {{ inventory_hostname }} à {{ ansible_date_time.iso8601 }}\n"
+    mode: "0644"
