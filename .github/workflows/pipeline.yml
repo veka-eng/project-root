@@ -1,4 +1,5 @@
 name: CI-CD Python
+
 on:
   push:
     branches: [dev, main]
@@ -8,19 +9,22 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+
       - name: Install deps
         run: |
           python -m venv .venv
           . .venv/bin/activate
           pip install -r app/requirements.txt
+
       - name: Run tests
         run: |
           . .venv/bin/activate
-          pytest -q
+          python -m pytest -q
 
   deploy:
     needs: ci
